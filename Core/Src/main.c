@@ -140,8 +140,8 @@ int main(void)
     		speelBrandAlarm();
     	}
 
-
-  	  if (HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0)){	//gaat niet in de if
+    	//uitlezen van CAN zonder interrupt
+  	  if (HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0)){
   		HAL_UART_Transmit(&huart2, (uint8_t*)test2, sizeof(test2), 100);
 
   		  HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &msg2, data2);
@@ -156,7 +156,7 @@ int main(void)
 	      HAL_UART_Transmit(&huart2, (uint8_t*)data2, sizeof(data2), 100);
 
 
-
+	      //bij ontvangen data toggle led, om te testen of CANbus werkt
   		  if (data2[0] == 1) {
   			  HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_3);
   			  HAL_Delay(1000);
@@ -252,7 +252,7 @@ static void MX_CAN1_Init(void)
 	  hcan1.Init.TimeSeg2 = CAN_BS2_2TQ;
 	  hcan1.Init.TimeTriggeredMode = DISABLE;
 	  hcan1.Init.AutoBusOff = DISABLE;
-	  hcan1.Init.AutoWakeUp = DISABLE;
+	  hcan1.Init.AutoWakeUp = ENABLE;
 	  hcan1.Init.AutoRetransmission = DISABLE;
 	  hcan1.Init.ReceiveFifoLocked = DISABLE;
 	  hcan1.Init.TransmitFifoPriority = DISABLE;
@@ -264,22 +264,7 @@ static void MX_CAN1_Init(void)
 
 
   /* USER CODE END CAN1_Init 1 */
-  hcan1.Instance = CAN1;
-  hcan1.Init.Prescaler = 4;
-  hcan1.Init.Mode = CAN_MODE_NORMAL;
-  hcan1.Init.SyncJumpWidth = CAN_SJW_1TQ;
-  hcan1.Init.TimeSeg1 = CAN_BS1_15TQ;
-  hcan1.Init.TimeSeg2 = CAN_BS2_2TQ;
-  hcan1.Init.TimeTriggeredMode = DISABLE;
-  hcan1.Init.AutoBusOff = DISABLE;
-  hcan1.Init.AutoWakeUp = ENABLE;
-  hcan1.Init.AutoRetransmission = DISABLE;
-  hcan1.Init.ReceiveFifoLocked = DISABLE;
-  hcan1.Init.TransmitFifoPriority = DISABLE;
-  if (HAL_CAN_Init(&hcan1) != HAL_OK)
-  {
-    Error_Handler();
-  }
+
   /* USER CODE BEGIN CAN1_Init 2 */
   CAN_FilterTypeDef sFilterConfig;
 
@@ -459,7 +444,10 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-
+/**
+ * Interrupt functie wanneer er een bericht via CAN binnenkomt
+ *
+ */
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
 	if (HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &msg2, data2) == HAL_OK){
 		  HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_3);
@@ -479,21 +467,30 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
 		    }
 	}
 
-}
 
+}
+/**
+ * Functie om een toon af te laten spelen op de buzzer
+ */
 void speelToon(double toon, int tijd) {
 
 	int ARR = KLOK_FREQ / (((2 * (PRESCALER + 1) * toon)) - 1);
 	__HAL_TIM_SET_AUTORELOAD(&htim1, ARR);
 	HAL_Delay(tijd);
 	__HAL_TIM_SET_AUTORELOAD(&htim1, 0);			//naar 0 zetten voor rust tussen de noten in
-}
 
+
+}
+/**
+ * Functie om het geluid van een brandalarm te laten spelen
+ */
 void speelBrandAlarm(){
 	speelToon(toon1, TijdsDuur100);
 	HAL_Delay(TijdsDuur100);
 	speelToon(toon2, TijdsDuur100);
 	HAL_Delay(TijdsDuur100);
+
+
 }
 /* USER CODE END 4 */
 
