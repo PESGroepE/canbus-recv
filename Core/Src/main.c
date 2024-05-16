@@ -410,6 +410,9 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
+/**
+ * STM test functie om een test bericht via CAN te sturen om het brandalarm aan te zetten.
+ */
 void SendCANBrandAlarm(int value){
 	uint32_t mb;
 	CAN_TxHeaderTypeDef msg;
