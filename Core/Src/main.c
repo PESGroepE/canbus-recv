@@ -27,17 +27,12 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-void speelToon(double toon, int tijd);
-void speelBrandAlarm();
+void SendCANBrandAlarm(int value);
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define KLOK_FREQ 80000000
-#define PRESCALER 2
-#define toon1 1000
-#define toon2 600
-#define TijdsDuur100 100
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -77,7 +72,9 @@ CAN_RxHeaderTypeDef msg2;
   char test2[] = "test2\r\n";
 
   float temperature;
+  float humidity;
   char temperatuurTekst[50];
+  char luchtvochtigheidTekst[50];
   int brandAlarm = 0;
 
 
@@ -133,38 +130,6 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-
-    //	HAL_UART_Transmit(&huart2, (uint8_t*)test, sizeof(test), 100);
-
-    	if (brandAlarm == 1){
-    		speelBrandAlarm();
-    	}
-
-    	//uitlezen van CAN zonder interrupt
-  	  if (HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0)){
-  		HAL_UART_Transmit(&huart2, (uint8_t*)test2, sizeof(test2), 100);
-
-  		  HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &msg2, data2);
-  		  memcpy(&temperature, data2, sizeof(data2));
-
-  		  sprintf(temperatuurTekst, "Temperatuur: %.2f°C\n\r", temperature);
-
-	      HAL_UART_Transmit(&huart2, (uint8_t*)data2, sizeof(data2), 100);
-  	      HAL_UART_Transmit(&huart2, (uint8_t*)newLine, strlen(newLine), HAL_MAX_DELAY);
-	      HAL_UART_Transmit(&huart2, (uint8_t*)temperatuurTekst, strlen(temperatuurTekst), 100);
-
-	      HAL_UART_Transmit(&huart2, (uint8_t*)data2, sizeof(data2), 100);
-
-
-	      //bij ontvangen data toggle led, om te testen of CANbus werkt
-  		  if (data2[0] == 1) {
-  			  HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_3);
-  			  HAL_Delay(1000);
-  		  }
-
-  	  }
-  	HAL_Delay(1000);
-
 
     }
   /* USER CODE END 3 */
@@ -444,54 +409,60 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+void SendCANBrandAlarm(int value){
+	uint32_t mb;
+	CAN_TxHeaderTypeDef msg;
+    uint8_t data[8] = {0};
+
+    // Config CAN bericht
+    msg.StdId = 0x02;
+    msg.IDE = CAN_ID_STD;
+    msg.RTR = CAN_RTR_DATA;
+    msg.DLC = 1;
+    msg.TransmitGlobalTime = DISABLE;
+
+	data[0] = value;
+	if (HAL_CAN_AddTxMessage(&hcan1, &msg, data, &mb) != HAL_OK) {	//stuur status van deuren
+		Error_Handler();
+	}
+}
+
+
 /**
  * Interrupt functie wanneer er een bericht via CAN binnenkomt
  *
  */
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
 	if (HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &msg2, data2) == HAL_OK){
-		  HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_3);
+		if(msg2.StdId == 0x05){
+		  //HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_3);
   		  memcpy(&temperature, data2, sizeof(data2));
 
   		  sprintf(temperatuurTekst, "Temperatuur: %.2f°C\n\r", temperature);
 
-	 //     HAL_UART_Transmit(&huart2, (uint8_t*)data2, sizeof(data2), 100);
   	      HAL_UART_Transmit(&huart2, (uint8_t*)newLine, strlen(newLine), HAL_MAX_DELAY);
 	      HAL_UART_Transmit(&huart2, (uint8_t*)temperatuurTekst, strlen(temperatuurTekst), 100);
 
-		    if(temperature > 25){ //logica op de pi
-		    	brandAlarm = 1;
+		    if(temperature > 26){ //logica op de pi
+		    	HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_3);
+		    	SendCANBrandAlarm(1);
 		    }
-		    else{
-		    	brandAlarm = 0;
+		    else if(temperature<26){
+		    	SendCANBrandAlarm(0);
 		    }
+		}
+		if(msg2.StdId == 0x06){
+			memcpy(&humidity, data2, sizeof(data2));
+			sprintf(luchtvochtigheidTekst, "Luchtvochtigheid: %.2f%%\n\r", humidity);
+
+	  	      HAL_UART_Transmit(&huart2, (uint8_t*)newLine, strlen(newLine), HAL_MAX_DELAY);
+		      HAL_UART_Transmit(&huart2, (uint8_t*)luchtvochtigheidTekst, strlen(luchtvochtigheidTekst), 100);
+		      HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_3);
+		}
 	}
-
-
 }
-/**
- * Functie om een toon af te laten spelen op de buzzer
- */
-void speelToon(double toon, int tijd) {
 
-	int ARR = KLOK_FREQ / (((2 * (PRESCALER + 1) * toon)) - 1);
-	__HAL_TIM_SET_AUTORELOAD(&htim1, ARR);
-	HAL_Delay(tijd);
-	__HAL_TIM_SET_AUTORELOAD(&htim1, 0);			//naar 0 zetten voor rust tussen de noten in
-
-
-}
-/**
- * Functie om het geluid van een brandalarm te laten spelen
- */
-void speelBrandAlarm(){
-	speelToon(toon1, TijdsDuur100);
-	HAL_Delay(TijdsDuur100);
-	speelToon(toon2, TijdsDuur100);
-	HAL_Delay(TijdsDuur100);
-
-
-}
 /* USER CODE END 4 */
 
 /**
